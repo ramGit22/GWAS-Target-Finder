@@ -111,24 +111,26 @@ const checkDrugTargetsImpl = async (geneIds) => {
     
     logger.info(`Checking drug target status for ${genesToFetch.length} genes from Open Targets`);
     
-    // Define GraphQL query
+    // Define GraphQL query - uses correct API structure for Open Targets Platform API v4
     const query = `
       query DrugTargets($ensemblIds: [String!]!) {
-        drugs(ensemblIds: $ensemblIds) {
-          count
-          rows {
-            id
-            drugType
-            name
-            maximumClinicalTrialPhase
-            targets {
-              approvedName
-              id
+        targets(ensemblIds: $ensemblIds) {
+          id
+          approvedSymbol
+          knownDrugs {
+            count
+            rows {
+              drugType
+              phase
             }
           }
         }
       }
     `;
+    
+    // Log the query and variables for debugging
+    logger.debug(`Open Targets GraphQL query: ${query.replace(/\s+/g, ' ')}`);
+    logger.debug(`Query variables: ${JSON.stringify({ ensemblIds: genesToFetch })}`);
     
     // Send request to Open Targets GraphQL API with retry and rate limiting
     const response = await retryWithBackoff(() =>
@@ -144,8 +146,9 @@ const checkDrugTargetsImpl = async (geneIds) => {
       )
     );
     
-    if (!response.data || !response.data.data || !response.data.data.drugs) {
+    if (!response.data || !response.data.data || !response.data.data.targets) {
       logger.warn('Invalid response from Open Targets API');
+      logger.debug('Response data:', JSON.stringify(response.data, null, 2).substring(0, 500) + '...');
       
       // Cache the negative results to avoid repeated API calls
       genesToFetch.forEach(geneId => {
@@ -156,26 +159,26 @@ const checkDrugTargetsImpl = async (geneIds) => {
       return drugTargetMap;
     }
     
-    const { drugs } = response.data.data;
+    const { targets } = response.data.data;
     
     // Mark genes that are drug targets based on API response
-    if (drugs.rows && drugs.rows.length > 0) {
-      drugs.rows.forEach(drug => {
-        if (drug.targets && drug.targets.length > 0) {
-          drug.targets.forEach(target => {
-            // Extract Ensembl ID from the target ID if needed
-            const targetId = target.id.startsWith('ENSG') 
-              ? target.id 
-              : target.id.split('/').pop();
-            
-            if (genesToFetch.includes(targetId)) {
-              drugTargetMap[targetId] = true;
-              
-              // Cache the positive result
-              const cacheKey = `drug_target_${targetId}`;
-              drugTargetCache.set(cacheKey, true);
-            }
-          });
+    if (targets && Array.isArray(targets)) {
+      targets.forEach(target => {
+        // Extract Ensembl ID from the target ID if needed
+        const targetId = target.id;
+        
+        // Check if this gene is a drug target (has known drugs)
+        if (genesToFetch.includes(targetId) && 
+            target.knownDrugs && 
+            target.knownDrugs.count > 0) {
+          
+          drugTargetMap[targetId] = true;
+          
+          // Cache the positive result
+          const cacheKey = `drug_target_${targetId}`;
+          drugTargetCache.set(cacheKey, true);
+          
+          logger.debug(`Found drug target: ${target.approvedSymbol} (${targetId}) with ${target.knownDrugs.count} known drugs`);
         }
       });
     }
@@ -194,10 +197,27 @@ const checkDrugTargetsImpl = async (geneIds) => {
     return drugTargetMap;
   } catch (error) {
     logger.error(`Error in checkDrugTargetsImpl: ${error.message}`);
+    
+    // Add more detailed error information
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      logger.error(`Status: ${error.response.status}`);
+      logger.error(`Response data: ${JSON.stringify(error.response.data, null, 2).substring(0, 500)}...`);
+      logger.error(`Headers: ${JSON.stringify(error.response.headers, null, 2)}`);
+    } else if (error.request) {
+      // The request was made but no response was received
+      logger.error('No response received from Open Targets API');
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      logger.error(`Request setup error: ${error.message}`);
+    }
+    
     throw error;
   }
 };
 
 module.exports = {
-  checkDrugTargets
+  checkDrugTargets,
+  checkDrugTargetsImpl
 };
