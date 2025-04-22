@@ -1,0 +1,188 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GWAS Target Finder API",
+    "description": "API for finding protein-coding genes near significant genetic variants (SNPs) and checking if they are known drug targets",
+    "version": "1.0.0",
+    "contact": {
+      "email": "your-email@example.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Returns the health status of the API",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "GWAS Target Finder API is running"
+                    },
+                    "version": {
+                      "type": "string",
+                      "example": "1.0.0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/find-targets": {
+      "post": {
+        "summary": "Find Target Genes",
+        "description": "Identifies protein-coding genes near significant genetic variants (SNPs) associated with a user-specified trait or disease, and checks if these genes are known drug targets",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetFindingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetFindingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TargetFindingRequest": {
+        "type": "object",
+        "required": ["trait"],
+        "properties": {
+          "trait": {
+            "type": "string",
+            "description": "Trait name or EFO ID (e.g., Type 2 diabetes or EFO_0001360)",
+            "example": "EFO_0001360"
+          },
+          "p_value": {
+            "type": "number",
+            "format": "float",
+            "description": "P-value threshold for significance (default: 5e-8)",
+            "example": 1e-5
+          },
+          "window_kb": {
+            "type": "integer",
+            "description": "Genomic window in kilobases (default: 100 kb)",
+            "example": 100
+          }
+        }
+      },
+      "TargetFindingResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "gwas_snp": {
+                  "type": "string",
+                  "description": "SNP identifier (rsID)",
+                  "example": "rs123456"
+                },
+                "snp_location": {
+                  "type": "string",
+                  "description": "Genomic location of the SNP (chromosome:position)",
+                  "example": "1:123456"
+                },
+                "nearby_gene_symbol": {
+                  "type": "string",
+                  "description": "Gene symbol",
+                  "example": "GENE1"
+                },
+                "nearby_gene_ensembl_id": {
+                  "type": "string",
+                  "description": "Ensembl gene ID",
+                  "example": "ENSG00000123456"
+                },
+                "is_drug_target": {
+                  "type": "boolean",
+                  "description": "Whether the gene is a known drug target",
+                  "example": true
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Optional warnings if any part of the request had issues",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string",
+            "description": "Optional message providing additional information",
+            "example": "No significant SNPs found for trait: EFO_0001360"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "message": {
+            "type": "string",
+            "example": "Validation error: Trait is required"
+          }
+        }
+      }
+    }
+  }
+}
