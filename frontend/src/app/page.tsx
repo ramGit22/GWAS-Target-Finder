@@ -26,15 +26,14 @@ export default function Home() {
     setWarnings([]);
     
     try {
-      // In production, use the actual API
-      // const response = await gwasApi.findTargets(trait, pValue, windowKb);
+      // Use the actual API endpoint
+      const response = await gwasApi.findTargets(trait, pValue, windowKb);
       
-      // For development/demo, use sample data
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-      const response = {
-        results: sampleData.results,
-        warnings: []
-      } as FindTargetsResponse;
+      // Fallback to sample data only if API call fails
+      // const response = {
+      //   results: sampleData.results,
+      //   warnings: []
+      // } as FindTargetsResponse;
       
       setResults(response.results);
       if (response.warnings) {
