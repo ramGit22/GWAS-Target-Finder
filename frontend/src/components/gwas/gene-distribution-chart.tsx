@@ -1,118 +1,94 @@
 import React, { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GeneTarget } from '@/lib/api/gwas';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, PieChart, Pie } from 'recharts';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface GeneDistributionChartProps {
   results: GeneTarget[];
 }
 
 export function GeneDistributionChart({ results }: GeneDistributionChartProps) {
-  // Process data for chromosome distribution chart
-  const chromosomeData = useMemo(() => {
-    // Extract chromosomes and count occurrences
-    const chromosomeCounts = results.reduce((acc, result) => {
+  // Skip rendering if no results
+  if (!results || results.length === 0) return null;
+  
+  // Process data for visualization
+  const data = useMemo(() => {
+    // Get chromosome distribution
+    const chromosomeData: Record<string, { count: number, drugTargets: number }> = {};
+    
+    // Group by chromosome
+    results.forEach(result => {
       const chromosome = result.snp_location.split(':')[0];
-      if (!acc[chromosome]) {
-        acc[chromosome] = { total: 0, drugTargets: 0 };
+      
+      if (!chromosomeData[chromosome]) {
+        chromosomeData[chromosome] = { count: 0, drugTargets: 0 };
       }
-      acc[chromosome].total++;
+      
+      chromosomeData[chromosome].count += 1;
+      
       if (result.is_drug_target) {
-        acc[chromosome].drugTargets++;
+        chromosomeData[chromosome].drugTargets += 1;
       }
-      return acc;
-    }, {} as Record<string, { total: number; drugTargets: number }>);
-
-    // Convert to array for chart and sort by chromosome number
-    return Object.entries(chromosomeCounts)
-      .map(([chromosome, counts]) => ({
-        chromosome,
-        count: counts.total,
-        drugTargetCount: counts.drugTargets,
-        nonDrugTargetCount: counts.total - counts.drugTargets
+    });
+    
+    // Convert to array format for chart
+    const chartData = Object.entries(chromosomeData)
+      .map(([chr, stats]) => ({
+        chromosome: chr,
+        count: stats.count,
+        drugTargets: stats.drugTargets
       }))
       .sort((a, b) => {
-        // Sort numerically, but handle X, Y, etc.
-        const aNum = parseInt(a.chromosome);
-        const bNum = parseInt(b.chromosome);
-        
-        if (isNaN(aNum) && isNaN(bNum)) {
-          return a.chromosome.localeCompare(b.chromosome);
-        }
-        if (isNaN(aNum)) return 1;
-        if (isNaN(bNum)) return -1;
-        return aNum - bNum;
+        // Sort numerically, but X and Y at the end
+        if (a.chromosome === 'X') return 1;
+        if (b.chromosome === 'X') return -1;
+        if (a.chromosome === 'Y') return 1;
+        if (b.chromosome === 'Y') return -1;
+        return parseInt(a.chromosome) - parseInt(b.chromosome);
       });
-  }, [results]);
-
-  // Process data for drug target pie chart
-  const drugTargetPieData = useMemo(() => {
-    const drugTargets = results.filter(r => r.is_drug_target).length;
-    const nonDrugTargets = results.length - drugTargets;
     
-    return [
-      { name: 'Drug Targets', value: drugTargets, color: '#4caf50' },
-      { name: 'Not Drug Targets', value: nonDrugTargets, color: '#8884d8' }
-    ];
+    return chartData;
   }, [results]);
-
+  
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <Card className="lg:col-span-2 h-80">
-        <CardHeader>
-          <CardTitle>Genes by Chromosome</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Chromosomal Distribution</CardTitle>
+        <CardDescription>Distribution of genes by chromosome</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chromosomeData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+            <BarChart
+              data={data}
+              margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+            >
               <XAxis 
                 dataKey="chromosome" 
-                label={{ value: 'Chromosome', position: 'insideBottom', offset: -10 }}
+                label={{ value: 'Chromosome', position: 'bottom', offset: 0 }}
               />
               <YAxis 
-                label={{ value: 'Number of Genes', angle: -90, position: 'insideLeft' }}
+                label={{ value: 'Gene Count', angle: -90, position: 'insideLeft' }}
               />
-              <Tooltip 
-                formatter={(value, name, props) => {
-                  const label = name === 'drugTargetCount' ? 'Drug Targets' : name === 'nonDrugTargetCount' ? 'Not Drug Targets' : 'Total';
-                  return [`${value} genes`, label];
+              <Tooltip
+                formatter={(value, name) => {
+                  return [`${value} genes`, name === 'count' ? 'Total' : 'Drug Targets'];
                 }}
                 labelFormatter={(label) => `Chromosome ${label}`}
               />
-              <Legend />
-              <Bar dataKey="nonDrugTargetCount" name="Not Drug Targets" stackId="a" fill="#8884d8" />
-              <Bar dataKey="drugTargetCount" name="Drug Targets" stackId="a" fill="#4caf50" />
+              <Bar dataKey="count" fill="#8884d8" name="Total Genes">
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.drugTargets > 0 ? '#8884d8' : '#ccc'} 
+                  />
+                ))}
+              </Bar>
+              <Bar dataKey="drugTargets" fill="#82ca9d" name="Drug Targets" />
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
-      
-      <Card className="h-80">
-        <CardHeader>
-          <CardTitle>Drug Target Distribution</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={drugTargetPieData}
-                cx="50%"
-                cy="50%"
-                labelLine={true}
-                outerRadius={80}
-                dataKey="value"
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-              >
-                {drugTargetPieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => [`${value} genes`, 'Count']} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

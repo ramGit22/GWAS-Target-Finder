@@ -27,11 +27,11 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
 
   // Common example traits with EFO IDs
   const exampleTraits = [
+    { name: 'Parkinson disease', id: 'Parkinson disease' },
     { name: 'Type 2 diabetes', id: 'EFO_0001360' },
     { name: 'Rheumatoid arthritis', id: 'EFO_0000685' },
     { name: 'Coronary artery disease', id: 'EFO_0001645' },
-    { name: 'Alzheimer\'s disease', id: 'EFO_0000249' },
-    { name: 'Crohn\'s disease', id: 'EFO_0000384' }
+    { name: 'Alzheimer\'s disease', id: 'EFO_0000249' }
   ];
 
   const setExampleTrait = (id: string) => {

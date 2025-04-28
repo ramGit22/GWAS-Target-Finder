@@ -7,8 +7,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 export interface GeneTarget {
   gwas_snp: string;
   snp_location: string;
+  functional_class: string;
   nearby_gene_symbol: string;
   nearby_gene_ensembl_id: string;
+  distance_to_gene: number;
+  is_within_gene: boolean;
   is_drug_target: boolean;
 }
 

@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { DrugTargetBadge } from './drug-target-badge';
 import { GeneDetails } from './gene-details';
+import { Badge } from '@/components/ui/badge';
 
 interface ResultsTableProps {
   results: GeneTarget[];
@@ -66,6 +67,33 @@ export function ResultsTable({ results }: ResultsTableProps) {
       header: 'Genomic Location',
     },
     {
+      accessorKey: 'functional_class',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-medium"
+          >
+            Variant Type
+            {column.getIsSorted() === "asc" ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : null}
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const functionalClass = row.getValue('functional_class') as string;
+        return (
+          <Badge variant="outline" className="capitalize">
+            {functionalClass.replace('_variant', '').replace(/_/g, ' ')}
+          </Badge>
+        );
+      },
+    },
+    {
       accessorKey: 'nearby_gene_symbol',
       header: ({ column }) => {
         return (
@@ -85,8 +113,33 @@ export function ResultsTable({ results }: ResultsTableProps) {
       },
     },
     {
-      accessorKey: 'nearby_gene_ensembl_id',
-      header: 'Ensembl ID',
+      accessorKey: 'distance_to_gene',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-medium"
+          >
+            Distance (bp)
+            {column.getIsSorted() === "asc" ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : null}
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const distance = row.getValue('distance_to_gene') as number;
+        const isWithinGene = row.original.is_within_gene;
+        
+        if (isWithinGene) {
+          return <span className="text-green-600 font-medium">Within gene</span>;
+        }
+        
+        return <span>{distance.toLocaleString()}</span>;
+      },
     },
     {
       accessorKey: 'is_drug_target',
@@ -124,7 +177,10 @@ export function ResultsTable({ results }: ResultsTableProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setSelectedGene(gene)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedGene(gene);
+            }}
             className="p-0 h-8 w-8"
             title="View gene details"
           >
@@ -162,8 +218,13 @@ export function ResultsTable({ results }: ResultsTableProps) {
     table.getColumn('nearby_gene_symbol')?.setFilterValue(value);
   };
 
-  // Count drug targets
+  // Count statistics
   const drugTargetCount = results.filter(result => result.is_drug_target).length;
+  const uniqueSnpsCount = new Set(results.map(r => r.gwas_snp)).size;
+  const genesWithinCount = results.filter(result => result.is_within_gene).length;
+  
+  // Get unique variant types
+  const variantTypes = [...new Set(results.map(r => r.functional_class))];
 
   return (
     <div className="space-y-6">
@@ -175,8 +236,9 @@ export function ResultsTable({ results }: ResultsTableProps) {
         <CardHeader>
           <CardTitle>Search Results</CardTitle>
           <CardDescription>
-            Found {results.length} genes near {new Set(results.map(r => r.gwas_snp)).size} significant SNPs, 
-            including {drugTargetCount} known drug targets
+            Found {results.length} genes near {uniqueSnpsCount} significant SNPs, 
+            including {drugTargetCount} known drug targets and {genesWithinCount} genes 
+            with variants directly within the gene
           </CardDescription>
           <div className="flex items-center pt-4">
             <div className="relative w-full max-w-sm">
