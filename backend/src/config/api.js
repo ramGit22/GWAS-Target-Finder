@@ -6,7 +6,8 @@ module.exports = {
   gwas: {
     baseUrl: process.env.GWAS_CATALOG_API_URL || 'https://www.ebi.ac.uk/gwas/rest/api',
     endpoints: {
-      associations: '/associations'
+      associations: '/associations',
+      snpsByTrait: '/singleNucleotidePolymorphisms/search/findByDiseaseTrait'
     },
     defaultParams: {
       pValue: process.env.DEFAULT_P_VALUE || 5e-8

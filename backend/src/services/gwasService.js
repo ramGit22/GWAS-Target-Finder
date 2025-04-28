@@ -15,7 +15,7 @@ const getLimitedGwasData = rateLimiter(
 
 /**
  * Fetch SNPs associated with a specified trait from the GWAS Catalog
- * @param {string} trait - Trait identifier (e.g., EFO_0001360 for Type 2 diabetes)
+ * @param {string} trait - Trait identifier (e.g., "Parkinson disease" or EFO ID)
  * @param {number} pValue - P-value threshold for significance
  * @returns {Promise<Array>} Array of significant SNPs
  */
@@ -25,45 +25,65 @@ const fetchSignificantSnps = async (trait, pValue) => {
     const pValueThreshold = pValue || apiConfig.defaultParams.pValue;
     logger.info(`Fetching SNPs for trait: ${trait} with p-value threshold: ${pValueThreshold}`);
     
+    // Check if trait is an EFO ID or a trait name
+    const isEfoId = trait.startsWith('EFO_');
+    const endpoint = apiConfig.endpoints.snpsByTrait;
+    
     // Call GWAS Catalog API with retry and rate limiting
     const response = await retryWithBackoff(() => 
       getLimitedGwasData(
-        apiConfig.endpoints.associations,
+        endpoint,
         {
-          efoTrait: trait,
-          pValueUpperLimit: pValueThreshold
+          diseaseTrait: isEfoId ? null : trait,
+          efoTrait: isEfoId ? trait : null,
+          size: 100 // Limit to 100 SNPs for performance
         }
       )
     );
     
-    if (!response.data || !response.data._embedded || !response.data._embedded.associations) {
-      logger.warn(`No associations found for trait: ${trait}`);
+    if (!response.data || !response.data._embedded || 
+        !response.data._embedded.singleNucleotidePolymorphisms) {
+      logger.warn(`No SNPs found for trait: ${trait}`);
       return [];
     }
     
     // Extract SNP information
-    const associations = response.data._embedded.associations;
-    logger.info(`Found ${associations.length} associations for trait: ${trait}`);
+    const snps = response.data._embedded.singleNucleotidePolymorphisms;
+    logger.info(`Found ${snps.length} SNPs for trait: ${trait}`);
     
-    // Map to simplified SNP objects with rsIDs
-    const snps = associations
-      .filter(assoc => assoc.loci && assoc.loci.length > 0 && 
-              assoc.loci[0].strongestRiskAlleles && 
-              assoc.loci[0].strongestRiskAlleles.length > 0)
-      .map(assoc => {
-        const rsId = assoc.loci[0].strongestRiskAlleles[0].riskAlleleName;
-        // Some risk allele names include the actual allele (e.g., "rs123-A")
-        // We just want the rsID part
-        const cleanRsId = rsId.split('-')[0];
+    // Map to simplified SNP objects with rsIDs and genomic contexts
+    const processedSnps = snps
+      .filter(snp => snp.rsId && snp.genomicContexts && snp.genomicContexts.length > 0)
+      .map(snp => {
+        // Find genes that are closest to the SNP or the SNP is within the gene
+        const relevantGenes = snp.genomicContexts
+          .filter(context => 
+            context.isClosestGene === true || 
+            (context.distance === 0 && context.gene && context.gene.geneName)
+          )
+          .map(context => ({
+            geneName: context.gene.geneName,
+            ensemblId: context.gene.ensemblGeneIds ? 
+                       context.gene.ensemblGeneIds[0]?.ensemblGeneId : null,
+            distance: context.distance,
+            isWithinGene: context.distance === 0
+          }));
+
+        // Get the chromosome and position information
+        const location = snp.locations && snp.locations.length > 0 ? {
+          chromosome: snp.locations[0].chromosomeName,
+          position: snp.locations[0].chromosomePosition
+        } : null;
+
         return {
-          rsId: cleanRsId,
-          pValue: assoc.pvalue,
-          traitName: assoc.efoTraits ? assoc.efoTraits.map(t => t.trait).join(', ') : 'Unknown'
+          rsId: snp.rsId,
+          location: location,
+          genes: relevantGenes,
+          functionalClass: snp.functionalClass || 'Unknown'
         };
-      })
-      .filter(snp => snp.rsId.startsWith('rs')); // Ensure valid rsID format
+      });
     
-    return snps;
+    return processedSnps;
   } catch (error) {
     logger.error(`Error fetching SNPs: ${error.message}`);
     throw new ApiError(`Failed to fetch SNPs from GWAS Catalog: ${error.message}`, 
