@@ -55,7 +55,33 @@ describe('API Endpoints', () => {
       expect(res.body).toHaveProperty('results');
       expect(res.body.results).toEqual([]);
       expect(res.body).toHaveProperty('message');
-      expect(gwasService.fetchSignificantSnps).toHaveBeenCalledWith('EFO_0001360', undefined);
+      expect(gwasService.fetchSignificantSnps).toHaveBeenCalledWith('EFO_0001360', undefined, 500);
+    });
+
+    it('should respect custom max_results parameter', async () => {
+      // Mock service responses
+      gwasService.fetchSignificantSnps.mockResolvedValue([
+        { rsId: 'rs123', pValue: 1e-8 }
+      ]);
+      
+      ensemblService.findNearbyGenes.mockResolvedValue([
+        { ensemblId: 'ENSG000001', symbol: 'GENE1' }
+      ]);
+      
+      openTargetsService.checkDrugTargets.mockResolvedValue({
+        'ENSG000001': true
+      });
+
+      const res = await request(app)
+        .post('/api/find-targets')
+        .send({ 
+          trait: 'EFO_0001360',
+          p_value: 1e-5,
+          max_results: 200
+        });
+      
+      expect(res.statusCode).toEqual(200);
+      expect(gwasService.fetchSignificantSnps).toHaveBeenCalledWith('EFO_0001360', 1e-5, 200);
     });
 
     it('should process valid request and return formatted results', async () => {
@@ -91,7 +117,7 @@ describe('API Endpoints', () => {
       expect(res.body.results[0]).toHaveProperty('is_drug_target', true);
       
       // Verify service calls with correct parameters
-      expect(gwasService.fetchSignificantSnps).toHaveBeenCalledWith('EFO_0001360', 1e-5);
+      expect(gwasService.fetchSignificantSnps).toHaveBeenCalledWith('EFO_0001360', 1e-5, 500);
       expect(ensemblService.findNearbyGenes).toHaveBeenCalledWith('1', 12345, 200);
     });
   });

@@ -9,7 +9,7 @@ const { ApiError } = require('../middleware/errorHandler');
  * Find target genes near GWAS SNPs for a specified trait
  */
 exports.findTargets = asyncHandler(async (req, res) => {
-  const { trait, p_value, window_kb } = req.body;
+  const { trait, p_value, window_kb, max_results } = req.body;
   
   if (!trait) {
     throw new ApiError('Trait parameter is required', 400);
@@ -18,8 +18,10 @@ exports.findTargets = asyncHandler(async (req, res) => {
   logger.info(`Processing target finding request for trait: ${trait}`);
   const warnings = [];
   
-  // Step 1: Fetch significant SNPs from GWAS Catalog using new endpoint
-  const snps = await gwasService.fetchSignificantSnps(trait, p_value);
+  // Step 1: Fetch significant SNPs from GWAS Catalog using pagination
+  const maxResults = max_results || 500; // Default to 500 if not specified
+  logger.info(`Using max results: ${maxResults}`);
+  const snps = await gwasService.fetchSignificantSnps(trait, p_value, maxResults);
   
   if (snps.length === 0) {
     return res.status(200).json({ 
@@ -40,7 +42,8 @@ exports.findTargets = asyncHandler(async (req, res) => {
         chromosome: snp.location.chromosome,
         position: snp.location.position,
         location: `${snp.location.chromosome}:${snp.location.position}`,
-        functionalClass: snp.functionalClass
+        functionalClass: snp.functionalClass,
+        genes: snp.genes
       });
     } else {
       // Old format: Need to look up location (for backward compatibility)
@@ -160,7 +163,13 @@ exports.findTargets = asyncHandler(async (req, res) => {
   
   res.status(200).json({
     results: formattedResults,
-    warnings: warnings.length > 0 ? warnings : undefined
+    warnings: warnings.length > 0 ? warnings : undefined,
+    pagination: {
+      requestedMaxResults: maxResults,
+      returnedResults: formattedResults.length,
+      totalSNPsFound: snps.length,
+      validSNPs: validSnps.length
+    }
   });
 });
 

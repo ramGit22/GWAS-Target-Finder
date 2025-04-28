@@ -17,9 +17,10 @@ const getLimitedGwasData = rateLimiter(
  * Fetch SNPs associated with a specified trait from the GWAS Catalog
  * @param {string} trait - Trait identifier (e.g., "Parkinson disease" or EFO ID)
  * @param {number} pValue - P-value threshold for significance
+ * @param {number} [maxResults=500] - Maximum number of SNPs to retrieve
  * @returns {Promise<Array>} Array of significant SNPs
  */
-const fetchSignificantSnps = async (trait, pValue) => {
+const fetchSignificantSnps = async (trait, pValue, maxResults = 500) => {
   try {
     // Normalize p-value
     const pValueThreshold = pValue || apiConfig.defaultParams.pValue;
@@ -29,30 +30,57 @@ const fetchSignificantSnps = async (trait, pValue) => {
     const isEfoId = trait.startsWith('EFO_');
     const endpoint = apiConfig.endpoints.snpsByTrait;
     
-    // Call GWAS Catalog API with retry and rate limiting
-    const response = await retryWithBackoff(() => 
-      getLimitedGwasData(
-        endpoint,
-        {
-          diseaseTrait: isEfoId ? null : trait,
-          efoTrait: isEfoId ? trait : null,
-          size: 100 // Limit to 100 SNPs for performance
-        }
-      )
-    );
+    let allSnps = [];
+    let currentPage = 0;
+    const pageSize = 100; // Number of results per page
+    let hasMoreResults = true;
     
-    if (!response.data || !response.data._embedded || 
-        !response.data._embedded.singleNucleotidePolymorphisms) {
-      logger.warn(`No SNPs found for trait: ${trait}`);
-      return [];
+    // Implement pagination loop to fetch results in chunks
+    while (hasMoreResults && allSnps.length < maxResults) {
+      // Call GWAS Catalog API with retry and rate limiting
+      const response = await retryWithBackoff(() => 
+        getLimitedGwasData(
+          endpoint,
+          {
+            diseaseTrait: isEfoId ? null : trait,
+            efoTrait: isEfoId ? trait : null,
+            size: pageSize,
+            page: currentPage
+          }
+        )
+      );
+      
+      if (!response.data || !response.data._embedded || 
+          !response.data._embedded.singleNucleotidePolymorphisms) {
+        logger.warn(`No SNPs found for trait: ${trait} on page ${currentPage}`);
+        break;
+      }
+      
+      // Extract SNP information
+      const pageSnps = response.data._embedded.singleNucleotidePolymorphisms;
+      logger.info(`Found ${pageSnps.length} SNPs for trait: ${trait} on page ${currentPage}`);
+      
+      // Add results to the cumulative collection
+      allSnps = [...allSnps, ...pageSnps];
+      
+      // Check if we should fetch the next page
+      const pageInfo = response.data.page || {};
+      const totalPages = pageInfo.totalPages || 0;
+      
+      currentPage++;
+      hasMoreResults = currentPage < totalPages && pageSnps.length === pageSize;
+      
+      // Safety check to prevent infinite loops
+      if (currentPage > 10) {
+        logger.warn('Reached maximum number of pages (10), stopping pagination');
+        break;
+      }
     }
     
-    // Extract SNP information
-    const snps = response.data._embedded.singleNucleotidePolymorphisms;
-    logger.info(`Found ${snps.length} SNPs for trait: ${trait}`);
+    logger.info(`Finished fetching SNPs. Total retrieved: ${allSnps.length}`);
     
     // Map to simplified SNP objects with rsIDs and genomic contexts
-    const processedSnps = snps
+    const processedSnps = allSnps
       .filter(snp => snp.rsId && snp.genomicContexts && snp.genomicContexts.length > 0)
       .map(snp => {
         // Find genes that are closest to the SNP or the SNP is within the gene

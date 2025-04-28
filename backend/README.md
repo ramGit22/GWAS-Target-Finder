@@ -60,7 +60,8 @@ npm start
   {
     "trait": "EFO_0001360",  // Trait name or EFO ID (e.g., Type 2 diabetes)
     "p_value": 1e-5,         // P-value threshold (default: 5e-8)
-    "window_kb": 100         // Genomic window in kilobases (default: 100 kb)
+    "window_kb": 100,        // Genomic window in kilobases (default: 100 kb)
+    "max_results": 500       // Maximum number of SNPs to retrieve (default: 500)
   }
   ```
 - **Response:**
@@ -75,7 +76,13 @@ npm start
         "is_drug_target": true
       }
     ],
-    "warnings": [] // Optional warnings, e.g., if drug target API fails
+    "warnings": [], // Optional warnings, e.g., if drug target API fails
+    "pagination": {
+      "requestedMaxResults": 500,
+      "returnedResults": 42,
+      "totalSNPsFound": 120,
+      "validSNPs": 65
+    }
   }
   ```
 

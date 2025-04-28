@@ -19,7 +19,11 @@ exports.targetFindingRules = [
   body('window_kb')
     .optional()
     .isInt({ min: 1, max: 1000 }).withMessage('Window size must be between 1 and 1000 kb')
-    .custom(isValidWindowSize).withMessage('Invalid window size. Please provide a number between 1 and 1000 kb.')
+    .custom(isValidWindowSize).withMessage('Invalid window size. Please provide a number between 1 and 1000 kb.'),
+    
+  body('max_results')
+    .optional()
+    .isInt({ min: 10, max: 1000 }).withMessage('Maximum results must be between 10 and 1000')
 ];
 
 /**
