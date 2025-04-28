@@ -22,7 +22,14 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
     const parsedPValue = pValue ? parseFloat(pValue) : undefined;
     const parsedWindowKb = windowKb ? parseInt(windowKb, 10) : undefined;
     
-    onSearch(trait, parsedPValue, parsedWindowKb);
+    // Capitalize first letter of search text if it exists and is lowercase
+    const capitalizedTrait = trait && trait.length > 0 
+      ? (trait.charAt(0).toLowerCase() === trait.charAt(0) 
+        ? trait.charAt(0).toUpperCase() + trait.slice(1) 
+        : trait)
+      : trait;
+    
+    onSearch(capitalizedTrait, parsedPValue, parsedWindowKb);
   };
 
   // Common example traits with EFO IDs
