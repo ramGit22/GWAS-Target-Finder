@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 // Define the API base URL - can be adjusted based on environment
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (typeof window !== 'undefined' && window.location.origin) || 
+  'http://localhost:3000';
 
 // Define the result type from the backend
 export interface GeneTarget {

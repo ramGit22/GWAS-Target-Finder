@@ -12,7 +12,11 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL || 'https://gwas-final.vercel.app'] 
+    : true
+}));
 app.use(express.json());
 app.use(require('./middleware/rateLimiter'));
 
@@ -22,16 +26,18 @@ app.use('/', routes);
 // Error handler middleware
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-});
+// Only start the server if we're not in a serverless environment
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  });
+  
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (err) => {
+    logger.error('Unhandled Promise Rejection:', err);
+    // In development, we might want to gracefully shutdown
+    // process.exit(1);
+  });
+}
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Promise Rejection:', err);
-  // In production, we might want to gracefully shutdown
-  // process.exit(1);
-});
-
-module.exports = app; // For testing
+module.exports = app;

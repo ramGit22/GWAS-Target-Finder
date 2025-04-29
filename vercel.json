@@ -3,22 +3,25 @@
   "builds": [
     {
       "src": "frontend/package.json",
-      "use": "@vercel/next",
-      "config": { "zeroConfig": true }
+      "use": "@vercel/next"
     },
     {
-      "src": "backend/index.js",
+      "src": "backend/vercel.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
+      "src": "/api/find-targets",
+      "dest": "backend/vercel.js"
+    },
+    {
       "src": "/api/(.*)",
-      "dest": "backend/index.js"
+      "dest": "backend/vercel.js"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend"
+      "dest": "frontend/$1"
     }
   ]
 }
